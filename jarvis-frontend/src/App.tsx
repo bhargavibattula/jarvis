@@ -8,9 +8,11 @@ import { MemoryPanel } from '@/components/memory/MemoryPanel';
 import { AgentTrace } from '@/components/agents/AgentTrace';
 import { SystemPanel } from '@/components/layout/SystemPanel';
 import { Panel } from '@/components/ui/Panel';
+import { Dashboard } from '@/components/layout/Dashboard';
 import { useJarvisStore } from '@/stores/jarvisStore';
 
 const panelTitles = {
+  dashboard: 'SYSTEM DASHBOARD',
   chat: 'NEURAL INTERFACE',
   memory: 'MEMORY CORE',
   agents: 'AGENT NETWORK',
@@ -47,12 +49,13 @@ export function App() {
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activePanel}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.25 }}
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.02 }}
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                   className="h-full"
                 >
+                  {activePanel === 'dashboard' && <Dashboard />}
                   {activePanel === 'chat' && <ChatView />}
                   {activePanel === 'memory' && (
                     <div className="h-full overflow-hidden">

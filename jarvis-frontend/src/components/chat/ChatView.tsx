@@ -22,7 +22,7 @@ export function ChatView() {
   return (
     <div className="flex flex-col h-full">
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5 custom-scrollbar">
         <AnimatePresence initial={false}>
           {messages.length === 0 ? (
             <motion.div

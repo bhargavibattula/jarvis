@@ -1,10 +1,11 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, Brain, Bot, Settings, ChevronLeft, ChevronRight, Trash2, Plus } from 'lucide-react';
+import { MessageSquare, Brain, Bot, Settings, ChevronLeft, ChevronRight, Trash2, LayoutDashboard } from 'lucide-react';
 import { useJarvisStore } from '@/stores/jarvisStore';
 import { JarvisOrb } from './JarvisOrb';
 import { clsx } from 'clsx';
 
 const navItems = [
+  { id: 'dashboard' as const, icon: LayoutDashboard, label: 'DASHBOARD' },
   { id: 'chat' as const, icon: MessageSquare, label: 'NEURAL CHAT' },
   { id: 'memory' as const, icon: Brain, label: 'MEMORY CORE' },
   { id: 'agents' as const, icon: Bot, label: 'AGENT HUB' },

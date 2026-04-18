@@ -60,7 +60,7 @@ interface JarvisStore {
   // System
   status: SystemStatus;
   sidebarOpen: boolean;
-  activePanel: 'chat' | 'memory' | 'agents' | 'settings';
+  activePanel: 'dashboard' | 'chat' | 'memory' | 'agents' | 'settings';
   voiceActive: boolean;
   voiceListening: boolean;
 
@@ -105,7 +105,7 @@ export const useJarvisStore = create<JarvisStore>((set, get) => ({
     uptime: 0,
   },
   sidebarOpen: true,
-  activePanel: 'chat',
+  activePanel: 'dashboard',
   voiceActive: false,
   voiceListening: false,
 
