@@ -34,13 +34,17 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     secret_key: str = "change-me-to-a-random-32-char-string"
 
+    # ── LLM Configuration ────────────────────────────────────────────────
+    primary_provider: str = "groq"          # anthropic | groq
+    
     # ── Anthropic ─────────────────────────────────────────────────────────
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-3-5-sonnet-20240620"
+    anthropic_model: str = "claude-3-5-sonnet-20241022"
     anthropic_max_tokens: int = 4096
 
     # ── Groq & Gemini ────────────────────────────────────────────────────
     groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
     gemini_api_key: str = ""
 
     # ── OpenAI (Voice) ───────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import { MemoryPanel } from '@/components/memory/MemoryPanel';
 import { VoicePanel } from '@/components/voice/VoicePanel';
 import { Panel } from '@/components/ui/Panel';
 import { useJarvisStore } from '@/stores/jarvisStore';
+import { useJarvisWebSocket } from '@/hooks/useWebSocket';
 import { clsx } from 'clsx';
 
 type Tab = 'agents' | 'memory' | 'voice';
@@ -18,7 +19,12 @@ const tabs: { id: Tab; icon: React.ElementType; label: string }[] = [
 
 export function RightPanel() {
   const [tab, setTab] = useState<Tab>('agents');
-  const { isStreaming, currentAgent } = useJarvisStore();
+  const { isStreaming, currentAgent, mode } = useJarvisStore();
+  const { sendMessage } = useJarvisWebSocket();
+
+  const handleVoiceTranscript = (text: string) => {
+    sendMessage(text, mode);
+  };
 
   return (
     <div className="w-64 flex flex-col border-l border-jarvis-border bg-jarvis-bg/95">
@@ -64,7 +70,7 @@ export function RightPanel() {
           >
             {tab === 'agents' && <AgentTrace />}
             {tab === 'memory' && <MemoryPanel />}
-            {tab === 'voice' && <VoicePanel />}
+            {tab === 'voice' && <VoicePanel onTranscript={handleVoiceTranscript} />}
           </motion.div>
         </AnimatePresence>
       </div>

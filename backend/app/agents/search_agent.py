@@ -70,8 +70,8 @@ class SearchAgent(BaseAgent):
     """Performs web searches and returns summarised, cited answers."""
 
     def __init__(self) -> None:
+        super().__init__()
         self._tools = _build_search_tools()
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     @property
     def name(self) -> AgentName:
@@ -110,23 +110,15 @@ class SearchAgent(BaseAgent):
             "If the results are insufficient, say so."
         )
 
-        full_response = ""
-        try:
-            with self._client.messages.stream(
-                model=settings.anthropic_model,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}],
-                system=(
-                    "You are Jarvis, a helpful AI assistant with access to web search. "
-                    "Give accurate, well-sourced answers. Be concise but complete."
-                ),
-            ) as stream:
-                for text in stream.text_stream:
-                    full_response += text
-                    yield self._token_event(conversation_id, text)
-        except anthropic.APIError as exc:
-            logger.error("Anthropic streaming error in SearchAgent: %s", exc)
-            yield self._error_event(conversation_id, f"LLM error: {exc}")
+        async for event in self._call_llm_stream(
+            conversation_id=conversation_id,
+            prompt=prompt,
+            system=(
+                "You are Jarvis, a helpful AI assistant with access to web search. "
+                "Give accurate, well-sourced answers. Be concise but complete."
+            ),
+        ):
+            yield event
 
         duration_ms = (time.monotonic() - t0) * 1000
-        yield self._end_event(conversation_id, AgentStatus.done, duration_ms)
+        yield self._end_event(conversation_id, AgentStatus.done, duration_ms)

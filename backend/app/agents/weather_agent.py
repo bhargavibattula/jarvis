@@ -79,20 +79,17 @@ def _build_weather_tools() -> List[BaseTool]:
                 )
             return "\n".join(lines)
         except Exception as exc:
-            logger.warning("Forecast fetch failed for %s: %s", location, exc)
             return f"Could not fetch forecast for '{location}': {exc}"
 
     return [get_current_weather, get_weather_forecast]
 
 
-# ── Agent ─────────────────────────────────────────────────────────────────────
-
 class WeatherAgent(BaseAgent):
     """Fetches weather data and generates natural-language weather reports."""
 
     def __init__(self) -> None:
+        super().__init__()
         self._tools = _build_weather_tools()
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     @property
     def name(self) -> AgentName:
@@ -146,20 +143,12 @@ class WeatherAgent(BaseAgent):
             "Mention clothing/activity suggestions if relevant. Be concise."
         )
 
-        full_response = ""
-        try:
-            with self._client.messages.stream(
-                model=settings.anthropic_model,
-                max_tokens=512,
-                messages=[{"role": "user", "content": prompt}],
-                system="You are Jarvis, a helpful AI assistant. Give weather summaries in a friendly, concise manner.",
-            ) as stream:
-                for text in stream.text_stream:
-                    full_response += text
-                    yield self._token_event(conversation_id, text)
-        except anthropic.APIError as exc:
-            logger.error("Anthropic streaming error in WeatherAgent: %s", exc)
-            yield self._error_event(conversation_id, f"LLM error: {exc}")
+        async for event in self._call_llm_stream(
+            conversation_id=conversation_id,
+            prompt=prompt,
+            system="You are Jarvis, a helpful AI assistant. Give weather summaries in a friendly, concise manner.",
+        ):
+            yield event
 
         duration_ms = (time.monotonic() - t0) * 1000
         yield self._end_event(conversation_id, AgentStatus.done, duration_ms)

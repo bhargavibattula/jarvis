@@ -44,7 +44,6 @@ def _build_coder_tools() -> List[BaseTool]:
         except Exception as exc:
             logger.warning("E2B execution failed: %s", exc)
             return f"Execution failed: {exc}"
-
     return [execute_python]
 
 
@@ -52,8 +51,8 @@ class CoderAgent(BaseAgent):
     """Generates, explains, and executes code using a secure E2B sandbox."""
 
     def __init__(self) -> None:
+        super().__init__()
         self._tools = _build_coder_tools()
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     @property
     def name(self) -> AgentName:
@@ -77,7 +76,7 @@ class CoderAgent(BaseAgent):
 
         yield self._start_event(conversation_id)
 
-        # ── 1. Generate code with Claude ──────────────────────────────────
+        # ── 1. Generate code ──────────────────────────────────────────────
         code_prompt = (
             f"Task: {input}\n\n"
             "Write clean, well-commented Python code to accomplish this task. "
@@ -87,18 +86,15 @@ class CoderAgent(BaseAgent):
 
         generated_code = ""
         try:
-            response = self._client.messages.create(
-                model=settings.anthropic_model,
-                max_tokens=2048,
-                messages=[{"role": "user", "content": code_prompt}],
+            generated_code = await self._call_llm(
+                prompt=code_prompt,
                 system=(
                     "You are an expert Python developer. "
                     "Write clean, efficient, and well-commented code. "
                     "Always include error handling."
                 ),
             )
-            generated_code = response.content[0].text
-        except anthropic.APIError as exc:
+        except Exception as exc:
             logger.error("Code generation failed: %s", exc)
             yield self._error_event(conversation_id, f"Code generation failed: {exc}")
             yield self._end_event(conversation_id, AgentStatus.error)
@@ -124,18 +120,12 @@ class CoderAgent(BaseAgent):
             "and note any important observations."
         )
 
-        try:
-            with self._client.messages.stream(
-                model=settings.anthropic_model,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": explain_prompt}],
-                system="You are Jarvis, a helpful coding assistant. Explain code results clearly.",
-            ) as stream:
-                for text in stream.text_stream:
-                    yield self._token_event(conversation_id, text)
-        except anthropic.APIError as exc:
-            logger.error("Anthropic streaming error in CoderAgent: %s", exc)
-            yield self._error_event(conversation_id, f"LLM error: {exc}")
+        async for event in self._call_llm_stream(
+            conversation_id=conversation_id,
+            prompt=explain_prompt,
+            system="You are Jarvis, a helpful coding assistant. Explain code results clearly.",
+        ):
+            yield event
 
         duration_ms = (time.monotonic() - t0) * 1000
         yield self._end_event(conversation_id, AgentStatus.done, duration_ms)

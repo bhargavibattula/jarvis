@@ -19,7 +19,7 @@ class DriveAgent(BaseAgent):
     """Searches and retrieves Google Drive files. TODO: Module 7."""
 
     def __init__(self) -> None:
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        super().__init__()
 
     @property
     def name(self) -> AgentName:

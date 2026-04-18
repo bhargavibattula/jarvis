@@ -25,6 +25,7 @@ import uuid
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 import anthropic
+import groq
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.agents.base_agent import BaseAgent
@@ -36,6 +37,7 @@ from app.agents.finance_agent import FinanceAgent
 from app.agents.news_agent import NewsAgent
 from app.agents.search_agent import SearchAgent
 from app.agents.weather_agent import WeatherAgent
+from app.agents.system_agent import SystemAgent
 from app.core.config import settings
 from app.models.agent import AgentEvent, AgentName, AgentStatus
 from app.models.chat import ChatRequest, JarvisMode
@@ -62,8 +64,8 @@ When answering:
 _CLASSIFICATION_PROMPT = """You are a routing classifier for Jarvis AI. 
 Given a user message, respond with ONLY a JSON object like:
 {
-  "intent": "one of: general | weather | search | finance | news | code | email | calendar | drive",
-  "agent": "one of: null | weather | search | finance | news | coder | email | calendar | drive",
+  "intent": "one of: general | weather | search | finance | news | code | email | calendar | drive | system",
+  "agent": "one of: null | weather | search | finance | news | coder | email | calendar | drive | system",
   "reason": "brief reason for routing decision",
   "needs_realtime": true/false,
   "entities": ["list", "of", "key", "entities"]
@@ -78,6 +80,7 @@ Route to an agent only when the query clearly needs that capability:
 - email: read/send Gmail, email management
 - calendar: calendar events, scheduling, Google Calendar
 - drive: Google Drive files, documents
+- system: open websites, switch panels, UI navigation, clear chat, device control
 - general: conversation, general knowledge, reasoning (NO agent needed)
 
 Respond ONLY with the JSON object, no other text."""
@@ -97,7 +100,9 @@ class Orchestrator:
     """
 
     def __init__(self) -> None:
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self._anthropic = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self._groq = groq.Groq(api_key=settings.groq_api_key)
+        
         self._agents: Dict[AgentName, BaseAgent] = {
             AgentName.weather: WeatherAgent(),
             AgentName.search: SearchAgent(),
@@ -107,8 +112,10 @@ class Orchestrator:
             AgentName.email: EmailAgent(),
             AgentName.calendar: CalendarAgent(),
             AgentName.drive: DriveAgent(),
+            AgentName.system: SystemAgent(),
         }
-        logger.info("Orchestrator initialised with %d agents", len(self._agents))
+        logger.info("Orchestrator initialised with %d agents (provider=%s)", 
+                    len(self._agents), settings.primary_provider)
 
     # ── Public entry point ────────────────────────────────────────────────
 
@@ -133,7 +140,7 @@ class Orchestrator:
             conversation_id=conversation_id,
             event_type="agent_start",
             agent=AgentName.orchestrator,
-            data={"mode": request.mode.value},
+            data={"mode": request.mode.value, "provider": settings.primary_provider},
         )
 
         # 3. Read memory
@@ -190,7 +197,7 @@ class Orchestrator:
                     agent=AgentName.orchestrator,
                     data={"message": f"Agent routing error: {exc}"},
                 )
-                # Fall through to direct Claude response
+                # Fall through to direct response
                 full_response = await self._direct_response(
                     request=request,
                     conversation_id=conversation_id,
@@ -198,7 +205,7 @@ class Orchestrator:
                     memories=memories,
                 )
         else:
-            # ── Direct Claude response (no agent needed) ──────────────────
+            # ── Direct response (no agent needed) ──────────────────
             async for token_event in self._stream_direct_response(
                 request=request,
                 conversation_id=conversation_id,
@@ -253,22 +260,33 @@ class Orchestrator:
     # ── Classification ────────────────────────────────────────────────────
 
     async def _classify(self, message: str) -> Dict[str, Any]:
-        """Use Claude to classify the user's intent and choose an agent."""
+        """Use Groq or Claude to classify the user's intent and choose an agent."""
         try:
-            response = self._client.messages.create(
-                model=settings.anthropic_model,
-                max_tokens=256,
-                system=_CLASSIFICATION_PROMPT,
-                messages=[{"role": "user", "content": message}],
-            )
-            raw = response.content[0].text.strip()
-            # Strip markdown fences if present
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            return json.loads(raw)
-        except (json.JSONDecodeError, IndexError, anthropic.APIError) as exc:
+            if settings.primary_provider == "groq":
+                response = self._groq.chat.completions.create(
+                    model=settings.groq_model,
+                    messages=[
+                        {"role": "system", "content": _CLASSIFICATION_PROMPT},
+                        {"role": "user", "content": message}
+                    ],
+                    response_format={"type": "json_object"},
+                    max_tokens=256,
+                )
+                return json.loads(response.choices[0].message.content)
+            else:
+                response = self._anthropic.messages.create(
+                    model=settings.anthropic_model,
+                    max_tokens=256,
+                    system=_CLASSIFICATION_PROMPT,
+                    messages=[{"role": "user", "content": message}],
+                )
+                raw = response.content[0].text.strip()
+                if raw.startswith("```"):
+                    raw = raw.split("```")[1]
+                    if raw.startswith("json"):
+                        raw = raw[4:]
+                return json.loads(raw)
+        except Exception as exc:
             logger.warning("Classification failed, defaulting to general: %s", exc)
             return {"intent": "general", "agent": None, "reason": "classification error"}
 
@@ -281,7 +299,7 @@ class Orchestrator:
         history: List[Dict],
         memories: List[str],
     ) -> AsyncIterator[AgentEvent]:
-        """Stream a direct Claude response (no agent delegation)."""
+        """Stream a direct response using the primary provider."""
         messages = self._build_messages(
             message=request.message,
             history=history,
@@ -290,21 +308,42 @@ class Orchestrator:
         system = self._build_system_prompt(request.mode, memories)
 
         try:
-            with self._client.messages.stream(
-                model=settings.anthropic_model,
-                max_tokens=settings.anthropic_max_tokens,
-                system=system,
-                messages=messages,
-            ) as stream:
-                for text in stream.text_stream:
-                    yield AgentEvent(
-                        conversation_id=conversation_id,
-                        event_type="token",
-                        agent=AgentName.orchestrator,
-                        token=text,
-                    )
-        except anthropic.APIError as exc:
-            logger.error("Direct response streaming failed: %s", exc)
+            if settings.primary_provider == "groq":
+                # Convert messages format for OpenAI-like API
+                groq_messages = [{"role": "system", "content": system}]
+                for m in messages:
+                   groq_messages.append({"role": m["role"], "content": m["content"]})
+                
+                stream = self._groq.chat.completions.create(
+                    model=settings.groq_model,
+                    messages=groq_messages,
+                    max_tokens=settings.anthropic_max_tokens,
+                    stream=True,
+                )
+                for chunk in stream:
+                    if chunk.choices[0].delta.content:
+                        yield AgentEvent(
+                            conversation_id=conversation_id,
+                            event_type="token",
+                            agent=AgentName.orchestrator,
+                            token=chunk.choices[0].delta.content,
+                        )
+            else:
+                with self._anthropic.messages.stream(
+                    model=settings.anthropic_model,
+                    max_tokens=settings.anthropic_max_tokens,
+                    system=system,
+                    messages=messages,
+                ) as stream:
+                    for text in stream.text_stream:
+                        yield AgentEvent(
+                            conversation_id=conversation_id,
+                            event_type="token",
+                            agent=AgentName.orchestrator,
+                            token=text,
+                        )
+        except Exception as exc:
+            logger.exception("Direct response streaming failed: %s", exc)
             yield AgentEvent(
                 conversation_id=conversation_id,
                 event_type="error",
@@ -323,14 +362,26 @@ class Orchestrator:
         messages = self._build_messages(request.message, history, memories)
         system = self._build_system_prompt(request.mode, memories)
         try:
-            response = self._client.messages.create(
-                model=settings.anthropic_model,
-                max_tokens=settings.anthropic_max_tokens,
-                system=system,
-                messages=messages,
-            )
-            return response.content[0].text
-        except anthropic.APIError as exc:
+            if settings.primary_provider == "groq":
+                groq_messages = [{"role": "system", "content": system}]
+                for m in messages:
+                   groq_messages.append({"role": m["role"], "content": m["content"]})
+                
+                response = self._groq.chat.completions.create(
+                    model=settings.groq_model,
+                    messages=groq_messages,
+                    max_tokens=settings.anthropic_max_tokens,
+                )
+                return response.choices[0].message.content
+            else:
+                response = self._anthropic.messages.create(
+                    model=settings.anthropic_model,
+                    max_tokens=settings.anthropic_max_tokens,
+                    system=system,
+                    messages=messages,
+                )
+                return response.content[0].text
+        except Exception as exc:
             logger.error("Direct response failed: %s", exc)
             return f"I encountered an error: {exc}"
 
@@ -339,18 +390,12 @@ class Orchestrator:
     async def _read_memory(
         self, user_id: str, query: str, conversation_id: str
     ) -> List[str]:
-        """
-        Retrieve relevant memories from Qdrant via Mem0.
-        TODO: Module 4 – wire up real Mem0 + Qdrant integration.
-        Returns a list of memory strings.
-        """
+        """Retrieve relevant memories from Qdrant via Mem0."""
         try:
-            # TODO: Module 4 – replace with actual Mem0 search
-            # from mem0 import Memory
-            # m = Memory()
-            # results = m.search(query, user_id=user_id)
-            # return [r["memory"] for r in results.get("results", [])]
-            return []
+            from app.api.memory import _get_memory_client
+            m = _get_memory_client()
+            results = m.search(query, user_id=user_id, limit=3)
+            return [r.get("memory", "") for r in results]
         except Exception as exc:
             logger.warning("Memory read failed: %s", exc)
             return []
@@ -358,20 +403,15 @@ class Orchestrator:
     async def _write_memory(
         self, user_id: str, message: str, response: str, conversation_id: str
     ) -> None:
-        """
-        Store the turn in Qdrant via Mem0.
-        TODO: Module 4 – wire up real Mem0 + Qdrant integration.
-        """
+        """Store the turn in Qdrant via Mem0."""
         try:
-            # TODO: Module 4 – replace with actual Mem0 add
-            # from mem0 import Memory
-            # m = Memory()
-            # m.add(
-            #     [{"role": "user", "content": message},
-            #      {"role": "assistant", "content": response}],
-            #     user_id=user_id,
-            # )
-            pass
+            from app.api.memory import _get_memory_client
+            m = _get_memory_client()
+            m.add(
+                f"User: {message}\nAssistant: {response}",
+                user_id=user_id,
+                metadata={"conversation_id": conversation_id}
+            )
         except Exception as exc:
             logger.warning("Memory write failed: %s", exc)
 
@@ -383,25 +423,21 @@ class Orchestrator:
         history: List[Dict],
         memories: List[str],
     ) -> List[Dict]:
-        """Assemble the messages list for the Anthropic API."""
+        """Assemble the messages list for the LLM API."""
         messages: List[Dict] = []
 
         # Include last N history turns
         for turn in history[-10:]:
             messages.append({"role": turn["role"], "content": turn["content"]})
 
-        # Add memory context as a system-like injection
+        # Add memory context as an informative injection
         if memories:
-            memory_ctx = "Relevant context from memory:\n" + "\n".join(
+            memory_ctx = "Context from my memory core:\n" + "\n".join(
                 f"- {m}" for m in memories
             )
-            messages.append({"role": "user", "content": memory_ctx})
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": "I have that context noted. How can I help you?",
-                }
-            )
+            # Use assistant role for memory injection to avoid user-input confusion
+            messages.append({"role": "user", "content": f"Note this memory context: {memory_ctx}"})
+            messages.append({"role": "assistant", "content": "Understood. I have that context in mind."})
 
         messages.append({"role": "user", "content": message})
         return messages

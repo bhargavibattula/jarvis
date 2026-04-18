@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type JarvisMode = 'focus' | 'research' | 'creative';
-export type AgentName = 'orchestrator' | 'search' | 'email' | 'calendar' | 'coder' | 'drive' | 'finance' | 'weather' | 'news';
+export type AgentName = 'orchestrator' | 'search' | 'email' | 'calendar' | 'coder' | 'drive' | 'finance' | 'weather' | 'news' | 'system';
 export type EventType = 'agent_start' | 'agent_step' | 'agent_end' | 'token' | 'tool_call' | 'tool_result' | 'memory_write' | 'memory_read' | 'conversation_id' | 'error' | 'done';
 
 export interface AgentEvent {
@@ -63,6 +63,7 @@ interface JarvisStore {
   activePanel: 'dashboard' | 'chat' | 'memory' | 'agents' | 'settings';
   voiceActive: boolean;
   voiceListening: boolean;
+  voiceFeedback: boolean;
 
   // Actions
   addMessage: (msg: ChatMessage) => void;
@@ -79,9 +80,10 @@ interface JarvisStore {
   addMemoryAccess: (id: string) => void;
   updateStatus: (status: Partial<SystemStatus>) => void;
   setSidebarOpen: (open: boolean) => void;
-  setActivePanel: (panel: 'chat' | 'memory' | 'agents' | 'settings') => void;
+  setActivePanel: (panel: 'dashboard' | 'chat' | 'memory' | 'agents' | 'settings') => void;
   setVoiceActive: (active: boolean) => void;
   setVoiceListening: (listening: boolean) => void;
+  setVoiceFeedback: (enabled: boolean) => void;
   setIsStreaming: (streaming: boolean) => void;
   clearMessages: () => void;
 }
@@ -108,6 +110,7 @@ export const useJarvisStore = create<JarvisStore>((set, get) => ({
   activePanel: 'dashboard',
   voiceActive: false,
   voiceListening: false,
+  voiceFeedback: true, // Default to true for "Voice Controlled" feel
 
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
   updateStreamContent: (token) =>
@@ -145,6 +148,7 @@ export const useJarvisStore = create<JarvisStore>((set, get) => ({
   setActivePanel: (panel) => set({ activePanel: panel }),
   setVoiceActive: (active) => set({ voiceActive: active }),
   setVoiceListening: (listening) => set({ voiceListening: listening }),
+  setVoiceFeedback: (enabled) => set({ voiceFeedback: enabled }),
   setIsStreaming: (streaming) => set({ isStreaming: streaming }),
   clearMessages: () => set({ messages: [], conversationId: null, currentStreamContent: '' }),
 }));

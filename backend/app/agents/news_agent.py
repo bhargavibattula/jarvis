@@ -87,7 +87,6 @@ def _build_news_tools() -> List[BaseTool]:
         except Exception as exc:
             logger.warning("News search failed for '%s': %s", query, exc)
             return f"Could not search news for '{query}': {exc}"
-
     return [get_top_headlines, search_news]
 
 
@@ -95,8 +94,8 @@ class NewsAgent(BaseAgent):
     """Fetches and summarises news headlines and articles."""
 
     def __init__(self) -> None:
+        super().__init__()
         self._tools = _build_news_tools()
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     @property
     def name(self) -> AgentName:
@@ -157,18 +156,12 @@ class NewsAgent(BaseAgent):
             "Highlight the most important or interesting developments."
         )
 
-        try:
-            with self._client.messages.stream(
-                model=settings.anthropic_model,
-                max_tokens=768,
-                messages=[{"role": "user", "content": prompt}],
-                system="You are Jarvis, a knowledgeable AI assistant. Present news clearly and engagingly.",
-            ) as stream:
-                for text in stream.text_stream:
-                    yield self._token_event(conversation_id, text)
-        except anthropic.APIError as exc:
-            logger.error("Anthropic streaming error in NewsAgent: %s", exc)
-            yield self._error_event(conversation_id, f"LLM error: {exc}")
+        async for event in self._call_llm_stream(
+            conversation_id=conversation_id,
+            prompt=prompt,
+            system="You are Jarvis, a knowledgeable AI assistant. Present news clearly and engagingly.",
+        ):
+            yield event
 
         duration_ms = (time.monotonic() - t0) * 1000
         yield self._end_event(conversation_id, AgentStatus.done, duration_ms)

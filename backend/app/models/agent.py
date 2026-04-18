@@ -31,6 +31,7 @@ class AgentName(str, Enum):
     finance = "finance"
     weather = "weather"
     news = "news"
+    system = "system"
 
 
 class AgentStep(BaseModel):

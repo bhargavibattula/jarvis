@@ -9,15 +9,15 @@ Each concrete agent must implement:
   - `run()`        – async generator that yields AgentEvent objects
   - `tools`        – list of LangChain BaseTool instances (can be empty)
 """
-from __future__ import annotations
-
 import logging
-import uuid
 from abc import ABC, abstractmethod
 from typing import AsyncIterator, List
 
+import anthropic
+import groq
 from langchain_core.tools import BaseTool
 
+from app.core.config import settings
 from app.models.agent import AgentEvent, AgentName, AgentStep, AgentStatus
 
 logger = logging.getLogger(__name__)
@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 class BaseAgent(ABC):
     """Abstract base class for all Jarvis agents."""
+
+    def __init__(self) -> None:
+        self._anthropic = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self._groq = groq.Groq(api_key=settings.groq_api_key)
 
     @property
     @abstractmethod
@@ -49,19 +53,74 @@ class BaseAgent(ABC):
         input: str,
         context: dict,
     ) -> AsyncIterator[AgentEvent]:
-        """
-        Execute the agent and yield AgentEvent objects.
-
-        Implementations MUST:
-        1. Emit AgentEvent(event_type="agent_start") first.
-        2. Emit AgentEvent(event_type="token") for each streamed LLM token.
-        3. Emit AgentEvent(event_type="tool_call") before each tool invocation.
-        4. Emit AgentEvent(event_type="tool_result") after each tool returns.
-        5. Emit AgentEvent(event_type="agent_end") last.
-        6. Catch ALL exceptions, emit AgentEvent(event_type="error"), and
-           continue — never let an exception propagate past this method.
-        """
+        """Execute the agent and yield AgentEvent objects."""
         ...
+
+    # ── LLM Helper ────────────────────────────────────────────────────────
+
+    async def _call_llm_stream(
+        self,
+        conversation_id: str,
+        prompt: str,
+        system: str = "You are Jarvis, a helpful AI assistant.",
+    ) -> AsyncIterator[AgentEvent]:
+        """Stream tokens from the primary LLM provider."""
+        try:
+            if settings.primary_provider == "groq":
+                messages = [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt}
+                ]
+                stream = self._groq.chat.completions.create(
+                    model=settings.groq_model,
+                    messages=messages,
+                    max_tokens=settings.anthropic_max_tokens,
+                    stream=True,
+                )
+                for chunk in stream:
+                    if chunk.choices[0].delta.content:
+                        yield self._token_event(conversation_id, chunk.choices[0].delta.content)
+            else:
+                with self._anthropic.messages.stream(
+                    model=settings.anthropic_model,
+                    max_tokens=settings.anthropic_max_tokens,
+                    system=system,
+                    messages=[{"role": "user", "content": prompt}],
+                ) as stream:
+                    for text in stream.text_stream:
+                        yield self._token_event(conversation_id, text)
+        except Exception as exc:
+            logger.error("LLM streaming error in %s: %s", self.name.value, exc)
+            yield self._error_event(conversation_id, f"LLM error: {exc}")
+
+    async def _call_llm(
+        self,
+        prompt: str,
+        system: str = "You are Jarvis, a helpful AI assistant.",
+    ) -> str:
+        """Non-streaming LLM call."""
+        try:
+            if settings.primary_provider == "groq":
+                response = self._groq.chat.completions.create(
+                    model=settings.groq_model,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=settings.anthropic_max_tokens,
+                )
+                return response.choices[0].message.content
+            else:
+                response = self._anthropic.messages.create(
+                    model=settings.anthropic_model,
+                    max_tokens=settings.anthropic_max_tokens,
+                    system=system,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return response.content[0].text
+        except Exception as exc:
+            logger.error("LLM call failed in %s: %s", self.name.value, exc)
+            raise exc
 
     # ── Convenience factories ─────────────────────────────────────────────
 

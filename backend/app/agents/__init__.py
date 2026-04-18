@@ -7,6 +7,7 @@ from app.agents.finance_agent import FinanceAgent
 from app.agents.news_agent import NewsAgent
 from app.agents.search_agent import SearchAgent
 from app.agents.weather_agent import WeatherAgent
+from app.agents.system_agent import SystemAgent
 
 __all__ = [
     "BaseAgent",
@@ -18,4 +19,5 @@ __all__ = [
     "NewsAgent",
     "SearchAgent",
     "WeatherAgent",
+    "SystemAgent",
 ]

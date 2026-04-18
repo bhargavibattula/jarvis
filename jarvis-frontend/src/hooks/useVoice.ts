@@ -16,7 +16,8 @@ export function useVoice() {
       return new Promise((resolve) => {
         recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
         recorder.onstop = () => {
-          const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+          const mimeType = recorder.mimeType || 'audio/webm';
+          const blob = new Blob(chunksRef.current, { type: mimeType });
           stream.getTracks().forEach((t) => t.stop());
           setVoiceListening(false);
           resolve(blob);
@@ -24,7 +25,8 @@ export function useVoice() {
         recorder.start();
         setVoiceListening(true);
       });
-    } catch {
+    } catch (err) {
+      console.error('Mic access error:', err);
       setVoiceListening(false);
       return null;
     }
@@ -35,16 +37,42 @@ export function useVoice() {
   }, []);
 
   const transcribe = useCallback(async (blob: Blob): Promise<string> => {
+    const ext = blob.type.split('/')[1]?.split(';')[0] || 'webm';
     const formData = new FormData();
-    formData.append('audio', blob, 'recording.webm');
+    formData.append('audio', blob, `recording.${ext}`);
     try {
       const res = await fetch('/api/voice/transcribe', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error('Transcription API error:', res.status, errText);
+        return '';
+      }
       const data = await res.json();
-      return data.text || '';
-    } catch {
+      return data.transcript || '';
+    } catch (err) {
+      console.error('Transcription network error:', err);
       return '';
     }
   }, []);
 
-  return { startListening, stopListening, transcribe };
+
+  const speak = useCallback(async (text: string) => {
+    try {
+      const res = await fetch('/api/voice/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) return;
+      
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      await audio.play();
+    } catch (err) {
+      console.error('Speech synthesis failed:', err);
+    }
+  }, []);
+
+  return { startListening, stopListening, transcribe, speak };
 }

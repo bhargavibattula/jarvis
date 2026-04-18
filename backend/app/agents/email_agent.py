@@ -47,8 +47,8 @@ class EmailAgent(BaseAgent):
     """Manages Gmail: read, search, compose, and send emails."""
 
     def __init__(self) -> None:
+        super().__init__()
         self._tools = _build_email_tools()
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     @property
     def name(self) -> AgentName:

@@ -1,11 +1,12 @@
 import { motion } from 'framer-motion';
-import { Activity, Cpu, Database, Wifi, WifiOff, Clock } from 'lucide-react';
+import { Activity, Cpu, Database, Wifi, WifiOff, Clock, Mic, MicOff } from 'lucide-react';
 import { useJarvisStore } from '@/stores/jarvisStore';
 import { StatusDot } from '@/components/ui/Panel';
 import { useEffect, useState } from 'react';
+import { clsx } from 'clsx';
 
 export function TopBar() {
-  const { status, mode, setMode } = useJarvisStore();
+  const { status, mode, setMode, voiceFeedback, setVoiceFeedback } = useJarvisStore();
   const [time, setTime] = useState(new Date());
   const [uptime, setUptime] = useState(0);
 
@@ -94,6 +95,23 @@ export function TopBar() {
             {status.connected ? `${status.latency}ms` : 'OFFLINE'}
           </span>
         </div>
+
+        <button 
+          onClick={() => setVoiceFeedback(!voiceFeedback)}
+          className="flex items-center gap-1.5 group mr-2"
+        >
+          {voiceFeedback ? (
+            <Mic className="w-3 h-3 text-jarvis-accent" />
+          ) : (
+            <MicOff className="w-3 h-3 text-jarvis-dim group-hover:text-jarvis-warn transition-colors" />
+          )}
+          <span className={clsx(
+            "font-mono text-[9px] tracking-widest transition-colors",
+            voiceFeedback ? "text-jarvis-accent" : "text-jarvis-dim group-hover:text-jarvis-warn"
+          )}>
+            VOICE:{voiceFeedback ? 'ON' : 'OFF'}
+          </span>
+        </button>
 
         {/* CPU */}
         <div className="flex items-center gap-1.5">

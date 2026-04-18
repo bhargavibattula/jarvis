@@ -103,8 +103,8 @@ class FinanceAgent(BaseAgent):
     """Provides stock and crypto market data with AI-generated analysis."""
 
     def __init__(self) -> None:
+        super().__init__()
         self._tools = _build_finance_tools()
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     @property
     def name(self) -> AgentName:
@@ -177,22 +177,16 @@ class FinanceAgent(BaseAgent):
             "Do NOT give investment advice."
         )
 
-        try:
-            with self._client.messages.stream(
-                model=settings.anthropic_model,
-                max_tokens=512,
-                messages=[{"role": "user", "content": prompt}],
-                system=(
-                    "You are Jarvis, a helpful AI assistant. "
-                    "Provide factual financial information. "
-                    "Always include a disclaimer that this is not financial advice."
-                ),
-            ) as stream:
-                for text in stream.text_stream:
-                    yield self._token_event(conversation_id, text)
-        except anthropic.APIError as exc:
-            logger.error("Anthropic streaming error in FinanceAgent: %s", exc)
-            yield self._error_event(conversation_id, f"LLM error: {exc}")
+        async for event in self._call_llm_stream(
+            conversation_id=conversation_id,
+            prompt=prompt,
+            system=(
+                "You are Jarvis, a helpful AI assistant. "
+                "Provide factual financial information. "
+                "Always include a disclaimer that this is not financial advice."
+            ),
+        ):
+            yield event
 
         duration_ms = (time.monotonic() - t0) * 1000
         yield self._end_event(conversation_id, AgentStatus.done, duration_ms)

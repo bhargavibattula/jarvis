@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { useJarvisStore, type AgentEvent, type JarvisMode } from '@/stores/jarvisStore';
+import { useVoice } from './useVoice';
 
 const WS_URL = 'ws://localhost:8000/chat/ws';
 
@@ -7,6 +8,7 @@ export function useJarvisWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
   const latencyStart = useRef<number>(0);
+  const { speak } = useVoice();
 
   const {
     addMessage,
@@ -21,7 +23,6 @@ export function useJarvisWebSocket() {
     updateStatus,
     setIsStreaming,
     messages,
-    currentStreamContent,
   } = useJarvisStore();
 
   const connect = useCallback(() => {
@@ -73,6 +74,30 @@ export function useJarvisWebSocket() {
 
           case 'tool_call':
             addAgentEvent(data);
+            if (data.agent === 'system' && data.data?.tool) {
+              const tool = data.data.tool as string;
+              const input = data.data.input as any;
+              
+              if (tool === 'open_website' && input.url) {
+                const newWin = window.open(input.url, '_blank');
+                if (!newWin) {
+                  console.warn('Popup blocked by browser.');
+                  const { addMessage } = useJarvisStore.getState();
+                  addMessage({
+                    id: crypto.randomUUID(),
+                    role: 'assistant',
+                    content: `⚠️ **Popup Blocked:** I tried to open the tab, but your browser blocked it. Please [click here to open ${input.url}](${input.url}).`,
+                    timestamp: new Date(),
+                  });
+                }
+              } else if (tool === 'switch_panel' && input.panel) {
+                const { setActivePanel } = useJarvisStore.getState();
+                const p = input.panel.toLowerCase();
+                if (['dashboard', 'chat', 'memory', 'agents', 'settings'].includes(p)) {
+                  setActivePanel(p as any);
+                }
+              }
+            }
             if (data.agent && data.data?.tool) {
               addActiveTool({
                 tool: data.data.tool as string,
@@ -92,6 +117,16 @@ export function useJarvisWebSocket() {
             break;
 
           case 'done':
+            const { voiceFeedback } = useJarvisStore.getState();
+            const responseText = data.data?.full_response as string | undefined;
+            
+            if (voiceFeedback && responseText) {
+              // Strip markdown code blocks before speaking so it doesn't read out full code loudly
+              const cleanText = responseText.replace(/```[\s\S]*?```/g, ' [I have provided the code in the interface] ').trim();
+              if (cleanText) {
+                speak(cleanText);
+              }
+            }
             finalizeStream();
             clearActiveTools();
             setCurrentAgent(null);
