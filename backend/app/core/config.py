@@ -36,8 +36,12 @@ class Settings(BaseSettings):
 
     # ── Anthropic ─────────────────────────────────────────────────────────
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-4-20250514"
+    anthropic_model: str = "claude-3-5-sonnet-20240620"
     anthropic_max_tokens: int = 4096
+
+    # ── Groq & Gemini ────────────────────────────────────────────────────
+    groq_api_key: str = ""
+    gemini_api_key: str = ""
 
     # ── OpenAI (Voice) ───────────────────────────────────────────────────
     openai_api_key: str = ""

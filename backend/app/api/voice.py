@@ -4,17 +4,18 @@ app/api/voice.py
 Voice endpoints:
   POST /voice/transcribe  – audio → text (Whisper STT)
   POST /voice/speak       – text → audio (OpenAI TTS)
-
-Module 3 will replace the 501 stubs with real implementations.
 """
 from __future__ import annotations
 
 import logging
+from io import BytesIO
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import Response
+from openai import OpenAI
 
-from app.models.voice import TTSRequest, VoiceRequest, VoiceResponse
+from app.core.config import settings
+from app.models.voice import TTSRequest, VoiceResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/voice", tags=["voice"])
@@ -33,12 +34,31 @@ async def transcribe(
 ) -> VoiceResponse:
     """
     Transcribe an uploaded audio file using OpenAI Whisper.
-    TODO: Module 3 – implement real Whisper transcription.
     """
-    raise HTTPException(
-        status_code=501,
-        detail="Voice transcription not yet implemented. Coming in Module 3.",
-    )
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+
+    try:
+        client = OpenAI(api_key=settings.openai_api_key)
+        
+        # Read file into memory
+        file_content = await audio.read()
+        file_obj = BytesIO(file_content)
+        file_obj.name = audio.filename  # Whisper needs a filename/extension
+
+        transcript = client.audio.transcriptions.create(
+            model=settings.whisper_model,
+            file=file_obj,
+            language=language,
+        )
+
+        return VoiceResponse(
+            transcript=transcript.text,
+            language=language or "auto",
+        )
+    except Exception as exc:
+        logger.error("Whisper transcription failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(exc)}")
 
 
 @router.post(
@@ -51,9 +71,24 @@ async def speak(request: TTSRequest) -> Response:
     """
     Convert text to speech using OpenAI TTS.
     Returns raw audio bytes (mp3 by default).
-    TODO: Module 3 – implement real TTS synthesis.
     """
-    raise HTTPException(
-        status_code=501,
-        detail="Text-to-speech not yet implemented. Coming in Module 3.",
-    )
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+
+    try:
+        client = OpenAI(api_key=settings.openai_api_key)
+        
+        response = client.audio.speech.create(
+            model=request.model or settings.tts_model,
+            voice=request.voice or settings.tts_voice,
+            input=request.text,
+            speed=request.speed,
+            response_format=request.response_format,
+        )
+
+        # Return the audio content as a streaming response or bytes
+        audio_content = response.content
+        return Response(content=audio_content, media_type=f"audio/{request.response_format}")
+    except Exception as exc:
+        logger.error("TTS synthesis failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Speech synthesis failed: {str(exc)}")
