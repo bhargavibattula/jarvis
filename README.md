@@ -91,8 +91,8 @@ npm run dev
 
 ## 👥 Contributors
 
--   **Bhargavi Battula** - *Lead Architect & Full Stack Developer*
--   **Antigravity** - *AI Strategy & UI/UX Implementation*
+-   **Bhargavi Battula**
+-   **Satya Ruchitha** 
 
 ---
 
