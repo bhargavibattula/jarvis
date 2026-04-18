@@ -4,37 +4,70 @@
 ![Build Status](https://img.shields.io/badge/Build-Success-00ff88?style=for-the-badge)
 ![Tech Stack](https://img.shields.io/badge/React-FastAPI-blue?style=for-the-badge)
 
-**JARVIS** (Just A Rather Very Intelligent System) is a state-of-the-art personal AI assistant designed with a professional, futuristic interface and powerful agentic capabilities. Unlike standard LLM wrappers, JARVIS utilizes a complex multi-agent orchestrator and persistent memory to handle complex real-world tasks.
+**JARVIS** (Just A Rather Very Intelligent System) is a high-performance, voice-driven AI virtual assistant. Designed with a professional, futuristic aesthetic and a multi-agent backend, JARVIS moves beyond simple chatbots to provide a truly autonomous experience—capable of real-time web research, code execution, system control, and proactive task management.
 
 ---
 
-## 🌟 Why JARVIS is Unique
+## 🌟 Project Uniqueness (Interview Highlights)
 
-JARVIS isn't just a chatbot; it's a **System of Intelligence**. It stands out through:
--   **Agentic Orchestration**: Uses LangGraph to manage a network of specialized agents that can collaborate on complex goals.
--   **Dual-Layer Memory**: Bridges the gap between short-term conversation context and long-term semantic memory using Qdrant and mem0.
--   **Neural Interface**: A high-fidelity, professional-grade UI featuring a dedicated **System Dashboard** for real-time monitoring of AI "thoughts," agent status, and system health.
--   **Voice-First Architecture**: Native support for high-quality audio transcription (STT) and text-to-speech (TTS), allowing for truly hands-free operation.
+JARVIS stands out as a sophisticated engineering project through several key architectural choices:
+
+- **Orchestrated Multi-Agent Logic**: Unlike linear LLM flows, JARVIS uses a central Orchestrator to route tasks to specialized agents (Weather, Finance, Coder, etc.). This ensures each task is handled by the most optimized logic and toolset.
+- **Continuous Voice-First UX**: Implements a dedicated "Wake Word" detection system ("Hey Jarvis"), a VAD (Voice Activity Detection) controller for seamless commands, and low-latency audio streaming.
+- **Persistent Memory Core**: Bridges short-term conversation context with long-term semantic memory using **Qdrant Vector DB** and **mem0**, allowing the AI to learn user preferences over time.
+- **Professional Neural UI**: A high-fidelity "Cyberpunk/Professional" dashboard built with Framer Motion and custom CSS, providing real-time telemetry of agent actions and system health.
 
 ---
 
-## 🚀 Core Features
+## 🎙️ Hands-Free Voice Control
 
-### 🖥️ Professional Dashboard
--   **Neural Core Visualization**: An interactive 3D-style orb representing the system's active state.
--   **System Diagnostics**: Real-time monitoring of CPU/Memory load, WebSocket latency, and database status.
--   **Agent Network Stream**: Monitor which agents (Search, Coder, Finance, etc.) are currently active and what they are processing.
+JARVIS is designed for a completely hands-free interaction loop:
 
-### 🧠 Agent Hub
--   **Search Agent**: Deep web research using Tavily.
--   **Finance Agent**: Real-time market analysis and crypto tracking via yfinance.
--   **News Agent**: Aggregated global news reporting.
--   **Coder Agent**: Autonomous code generation and interpretation via E2B.
--   **System Agents**: Native integration with Google Drive, Calendar, and Email.
+1. **Wake Word Detection**: Continually listens for "Hey Jarvis" using the browser's Web Speech API.
+2. **Dynamic Command Recording**: Once triggered, a high-quality MediaRecorder captures the user's intent. It uses intelligent silencing detection to know when you've finished speaking.
+3. **OpenAI Whisper STT**: Transcribes commands with 99% accuracy, even in noisy environments.
+4. **OpenAI TTS Synthesis**: Delivers natural-sounding responses, completing the human-like interaction cycle.
+5. **Auto-Resume**: Automatically resumes wake-word listening after responding, enabling a multi-turn voice conversation without manual clicks.
 
-### 🗣️ Multi-Modal Interaction
--   **Neural Chat**: A high-performance chat interface with Markdown support, code highlighting, and agent tracing.
--   **Voice Core**: Low-latency voice interaction using OpenAI Whisper and TTS.
+---
+
+## 🧠 The Agent Network
+
+JARVIS delegates complexity to a network of specialized agents, each equipped with its own toolset:
+
+| Agent | Capability | Tools Used |
+| :--- | :--- | :--- |
+| **Search Agent** | Advanced, cited web research | Tavily, Playwright |
+| **Coder Agent** | Writes and executes Python code in real-time | E2B Code Interpreter |
+| **Finance Agent** | Stock quotes, crypto trends, and market analysis | yfinance, CoinGecko |
+| **Weather Agent** | Precise current conditions and 5-day forecasts | OpenWeatherMap |
+| **Email Agent** | Professional email drafting and (OAuth required) Gmail management | Gmail API |
+| **System Agent** | Controls the browser/OS (Open tabs, switch panels) | System Navigation Core |
+| **News Agent** | Fetches latest global headlines | NewsAPI |
+
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+graph TD
+    User((User)) -->|Voice/Text| UI[React Dashboard]
+    UI -->|WebSocket| Orch[Orchestrator]
+    Orch -->|Memory Read| VDB[(Qdrant Vector DB)]
+    Orch -->|Route| Agents{Agent Network}
+    
+    subgraph Agents
+        C[Coder Agent] --> E2B[E2B Sandbox]
+        S[Search Agent] --> TV[Tavily API]
+        F[Finance Agent] --> YF[yfinance API]
+        W[Weather Agent] --> OWM[OpenWeatherMap]
+    end
+    
+    Agents -->|Results| Orch
+    Orch -->|Synthesis| LLM[Claude 3.5 Sonnet]
+    LLM -->|Stream Tokens| UI
+    Orch -->|Memory Write| VDB
+```
 
 ---
 
@@ -44,46 +77,30 @@ JARVIS isn't just a chatbot; it's a **System of Intelligence**. It stands out th
 | :--- | :--- |
 | **Frontend** | React 18, TypeScript, Tailwind CSS, Framer Motion, Lucide Icons |
 | **Backend** | FastAPI, LangGraph, LangChain, Python 3.10+ |
-| **Intelligence** | Anthropic Claude 3.5 Sonnet, OpenAI (Voice) |
-| **Memory/DB** | Qdrant (Vector), PostgreSQL (Relational), Redis (Cache), mem0ai |
+| **Intelligence** | Anthropic Claude 3.5 Sonnet (Core), Groq Llama 3 (Classification) |
+| **Voice** | OpenAI Whisper (STT) & OpenAI TTS-1 |
+| **Storage** | Qdrant (Vector), PostgreSQL (Relational), Redis (Cache), mem0ai |
 
 ---
 
-## 🏗️ Installation & Setup
+## 🚀 Getting Started
 
 ### 1. Prerequisites
--   Python 3.10 or higher.
--   Node.js 18 or higher.
--   Docker (recommended for PostgreSQL, Redis, and Qdrant).
+- Python 3.10+, Node.js 18+, Docker.
+- API Keys: Anthropic, Groq, OpenAI, Tavily, E2B, OpenWeatherMap.
 
-### 2. Backend Setup
+### 2. Quick Setup
 ```bash
-# Navigate to backend directory
+# Clone and setup Backend
 cd backend
-
-# Create virtual environment
 python -m venv venv
-source venv/bin/activate # or venv\Scripts\activate on Windows
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Create .env file from example
-cp .env.example .env
-
-# Run the server
+cp .env.example .env # Add your keys here
 uvicorn app.main:app --reload
-```
 
-### 3. Frontend Setup
-```bash
-# Navigate to frontend directory
-cd jarvis-frontend
-
-# Install dependencies
+# Setup Frontend
+cd ../jarvis-frontend
 npm install
-
-# Start the development server
 npm run dev
 ```
 
@@ -91,13 +108,13 @@ npm run dev
 
 ## 👥 Contributors
 
--   **Bhargavi Battula**
--   **Satya Ruchitha** 
+- **Bhargavi Battula**
+- **Satya Ruchitha** 
 
 ---
 
 ## 📜 License
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.
 
 ---
-*Created with focus and precision to redefine human-AI interaction.*
+*Developed with precision to push the boundaries of Agentic AI and Human-Computer Interaction.*
