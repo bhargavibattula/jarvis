@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { AgentTrace } from '@/components/agents/AgentTrace';
 import { MemoryPanel } from '@/components/memory/MemoryPanel';
 import { VoicePanel } from '@/components/voice/VoicePanel';
-import { Panel } from '@/components/ui/Panel';
-import { useJarvisStore } from '@/stores/jarvisStore';
-import { useJarvisWebSocket } from '@/hooks/useWebSocket';
 import { clsx } from 'clsx';
+import { useJarvisStore } from '@/stores/jarvisStore';
+import { useJarvisWebSocket, setVoiceResponseCallback } from '@/hooks/useWebSocket';
+import { useVoiceAssistant } from '@/hooks/useVoiceAssistant';
 
 type Tab = 'agents' | 'memory' | 'voice';
 
@@ -18,13 +18,24 @@ const tabs: { id: Tab; icon: React.ElementType; label: string }[] = [
 ];
 
 export function RightPanel() {
-  const [tab, setTab] = useState<Tab>('agents');
-  const { isStreaming, currentAgent, mode } = useJarvisStore();
+  const [tab, setTab] = useState<Tab>('voice');
+  const { isStreaming, currentAgent, voiceActive } = useJarvisStore();
   const { sendMessage } = useJarvisWebSocket();
 
-  const handleVoiceTranscript = (text: string) => {
-    sendMessage(text, mode);
-  };
+  const {
+    voiceState,
+    lastTranscript,
+    wakeDetected,
+    activateVoiceAssistant,
+    deactivateVoiceAssistant,
+    manualListen,
+    stopListening,
+    onResponseReady,
+  } = useVoiceAssistant(sendMessage);
+
+  // Wire onResponseReady into WebSocket so it's called when done arrives
+  // We use the module-level setter to avoid prop drilling
+  setVoiceResponseCallback(voiceActive ? onResponseReady : null);
 
   return (
     <div className="w-64 flex flex-col border-l border-jarvis-border bg-jarvis-bg/95">
@@ -43,10 +54,15 @@ export function RightPanel() {
           >
             <Icon className="w-3.5 h-3.5" />
             <span className="font-display text-[8px] tracking-widest">{label}</span>
-            {/* Agent activity badge */}
+
+            {/* Activity indication */}
             {id === 'agents' && (isStreaming || currentAgent) && (
               <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-jarvis-success animate-pulse" />
             )}
+            {id === 'voice' && voiceActive && (
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-jarvis-accent animate-pulse" />
+            )}
+
             {tab === id && (
               <motion.div
                 layoutId="right-tab"
@@ -70,7 +86,17 @@ export function RightPanel() {
           >
             {tab === 'agents' && <AgentTrace />}
             {tab === 'memory' && <MemoryPanel />}
-            {tab === 'voice' && <VoicePanel onTranscript={handleVoiceTranscript} />}
+            {tab === 'voice' && (
+              <VoicePanel
+                voiceState={voiceState}
+                lastTranscript={lastTranscript}
+                wakeDetected={wakeDetected}
+                onActivate={activateVoiceAssistant}
+                onDeactivate={deactivateVoiceAssistant}
+                onManualListen={manualListen}
+                onStopListening={stopListening}
+              />
+            )}
           </motion.div>
         </AnimatePresence>
       </div>

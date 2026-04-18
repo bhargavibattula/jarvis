@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+import os
 from typing import AsyncIterator, List
 
 import anthropic
@@ -27,7 +28,23 @@ def _build_coder_tools() -> List[BaseTool]:
         """Execute Python code in a secure E2B sandbox and return the output."""
         try:
             from e2b_code_interpreter import Sandbox
-            with Sandbox(api_key=settings.e2b_api_key) as sandbox:
+            
+            # Ensure API key is in environment as fallback for older/newer versions
+            if settings.e2b_api_key:
+                os.environ["E2B_API_KEY"] = settings.e2b_api_key
+
+            # Try to initialize sandbox
+            # We first try with the api_key param, if it fails with TypeError, we try without
+            sandbox = None
+            try:
+                sandbox = Sandbox(api_key=settings.e2b_api_key)
+            except TypeError:
+                sandbox = Sandbox()
+            
+            if not sandbox:
+                return "Failed to initialize Sandbox."
+
+            try:
                 execution = sandbox.run_code(code)
                 output_parts = []
                 if execution.logs.stdout:
@@ -41,9 +58,13 @@ def _build_coder_tools() -> List[BaseTool]:
                         if hasattr(r, "text") and r.text:
                             output_parts.append(f"RESULT: {r.text}")
                 return "\n".join(output_parts) if output_parts else "Code executed with no output."
+            finally:
+                sandbox.close()
+
         except Exception as exc:
             logger.warning("E2B execution failed: %s", exc)
-            return f"Execution failed: {exc}"
+            return f"Execution failed: {str(exc)}"
+
     return [execute_python]
 
 
@@ -108,7 +129,15 @@ class CoderAgent(BaseAgent):
         yield self._tool_call_event(
             conversation_id, "execute_python", {"code": code[:500] + "..." if len(code) > 500 else code}
         )
-        execution_result = self._tools[0].invoke({"code": code})
+        
+        # Execute tool safely
+        try:
+            # We use invoke which handles the tool logic
+            execution_result = self._tools[0].invoke({"code": code})
+        except Exception as exc:
+            logger.error("Tool execution bubbled up error: %s", exc)
+            execution_result = f"Local error during execution: {exc}"
+
         yield self._tool_result_event(conversation_id, "execute_python", execution_result)
 
         # ── 4. Stream explanation ─────────────────────────────────────────

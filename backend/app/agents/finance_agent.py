@@ -128,26 +128,27 @@ class FinanceAgent(BaseAgent):
 
         yield self._start_event(conversation_id)
 
-        # ── Determine what to look up ─────────────────────────────────────
-        lower = input.lower()
+        # ── 1. Extract Entity accurately using LLM ────────────────────────
+        # This replaces the brittle regex/keyword mapping
+        try:
+            extraction_prompt = (
+                f"User query: '{input}'\n\n"
+                "If the user is asking about a STOCK, return 'STOCK:TICKER' (e.g. 'STOCK:TSLA').\n"
+                "If the user is asking about a CRYPTO, return 'CRYPTO:ID' (e.g. 'CRYPTO:bitcoin', use CoinGecko IDs).\n"
+                "If unsure, return 'NONE'. Return ONLY the string."
+            )
+            extracted = await self._call_llm(
+                prompt=extraction_prompt, 
+                system="You are a financial entity extractor. Respond with the formatted entity string only."
+            )
+            extracted = extracted.strip().strip("'\"")
+        except:
+            extracted = "NONE"
+
         financial_data = ""
 
-        crypto_keywords = ["bitcoin", "btc", "ethereum", "eth", "crypto", "coin", "solana", "bnb"]
-        is_crypto = any(kw in lower for kw in crypto_keywords)
-
-        if is_crypto:
-            # Map common names to CoinGecko IDs
-            coin_map = {
-                "bitcoin": "bitcoin", "btc": "bitcoin",
-                "ethereum": "ethereum", "eth": "ethereum",
-                "solana": "solana", "sol": "solana",
-                "bnb": "binancecoin",
-            }
-            coin_id = "bitcoin"
-            for k, v in coin_map.items():
-                if k in lower:
-                    coin_id = v
-                    break
+        if extracted.startswith("CRYPTO:"):
+            coin_id = extracted.split(":")[1].lower()
             yield self._tool_call_event(
                 conversation_id, "get_crypto_price", {"coin_id": coin_id}
             )
@@ -155,11 +156,8 @@ class FinanceAgent(BaseAgent):
             yield self._tool_result_event(
                 conversation_id, "get_crypto_price", financial_data
             )
-        else:
-            # Try to extract a ticker
-            import re
-            tickers = re.findall(r'\b[A-Z]{1,5}\b', input)
-            ticker = tickers[0] if tickers else "AAPL"
+        elif extracted.startswith("STOCK:"):
+            ticker = extracted.split(":")[1].upper()
             yield self._tool_call_event(
                 conversation_id, "get_stock_price", {"ticker": ticker}
             )
@@ -167,6 +165,22 @@ class FinanceAgent(BaseAgent):
             yield self._tool_result_event(
                 conversation_id, "get_stock_price", financial_data
             )
+        else:
+            # Final fallback to existing keyword logic if LLM failed
+            lower = input.lower()
+            crypto_keywords = ["bitcoin", "btc", "ethereum", "eth", "crypto", "coin", "solana", "bnb"]
+            is_crypto = any(kw in lower for kw in crypto_keywords)
+
+            if is_crypto:
+                coin_id = "bitcoin"
+                yield self._tool_call_event(conversation_id, "get_crypto_price", {"coin_id": coin_id})
+                financial_data = self._tools[1].invoke({"coin_id": coin_id})
+                yield self._tool_result_event(conversation_id, "get_crypto_price", financial_data)
+            else:
+                ticker = "AAPL"
+                yield self._tool_call_event(conversation_id, "get_stock_price", {"ticker": ticker})
+                financial_data = self._tools[0].invoke({"ticker": ticker})
+                yield self._tool_result_event(conversation_id, "get_stock_price", financial_data)
 
         # ── Stream LLM analysis ───────────────────────────────────────────
         prompt = (

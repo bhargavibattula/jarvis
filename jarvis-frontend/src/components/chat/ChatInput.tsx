@@ -52,18 +52,24 @@ export function ChatInput({ onSend }: ChatInputProps) {
 
   const handleMic = async () => {
     if (isRecording) {
+      // Stop and immediately transcribe + send
       stopListening();
       setIsRecording(false);
       return;
     }
     setIsRecording(true);
-    const blob = await startListening();
+    // startListening resolves when stopListening() is called
+    const blobPromise = startListening();
+    // Auto-stop after 8 seconds of recording
+    const timer = setTimeout(() => stopListening(), 8000);
+    const blob = await blobPromise;
+    clearTimeout(timer);
     setIsRecording(false);
     if (blob) {
       const text = await transcribe(blob);
-      if (text) {
-        setInput((prev) => (prev ? `${prev} ${text}` : text));
-        textareaRef.current?.focus();
+      if (text.trim()) {
+        // Auto-send — no need to populate the input box
+        onSend(text.trim());
       }
     }
   };

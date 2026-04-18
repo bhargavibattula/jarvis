@@ -183,12 +183,31 @@ class Orchestrator:
                     "memories": memories,
                 }
                 token_parts: List[str] = []
-                async for event in agent.run(input=request.message, context=context):
-                    # Collect tokens for memory writing
-                    if event.event_type == "token" and event.token:
-                        token_parts.append(event.token)
-                    yield event
-                full_response = "".join(token_parts)
+                try:
+                    async for event in agent.run(input=request.message, context=context):
+                        # Collect tokens for memory writing
+                        if event.event_type == "token" and event.token:
+                            token_parts.append(event.token)
+                        yield event
+                    full_response = "".join(token_parts)
+                except Exception as exc:
+                    logger.exception("Sub-agent %s crashed unhandled", agent_name)
+                    yield AgentEvent(
+                        conversation_id=conversation_id,
+                        event_type="error",
+                        agent=agent_name,
+                        data={"message": f"Agent error: {exc}"},
+                    )
+                    # Try to generate a direct response as fallback
+                    async for token_event in self._stream_direct_response(
+                        request=request,
+                        conversation_id=conversation_id,
+                        history=history,
+                        memories=memories,
+                    ):
+                        if token_event.event_type == "token" and token_event.token:
+                            full_response += token_event.token
+                        yield token_event
             except (KeyError, ValueError) as exc:
                 logger.error("Agent routing failed: %s", exc)
                 yield AgentEvent(

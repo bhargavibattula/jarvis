@@ -64,6 +64,8 @@ interface JarvisStore {
   voiceActive: boolean;
   voiceListening: boolean;
   voiceFeedback: boolean;
+  isSpeaking: boolean;
+  voiceError: string | null;
 
   // Actions
   addMessage: (msg: ChatMessage) => void;
@@ -84,6 +86,8 @@ interface JarvisStore {
   setVoiceActive: (active: boolean) => void;
   setVoiceListening: (listening: boolean) => void;
   setVoiceFeedback: (enabled: boolean) => void;
+  setVoiceError: (error: string | null) => void;
+  setIsSpeaking: (speaking: boolean) => void;
   setIsStreaming: (streaming: boolean) => void;
   clearMessages: () => void;
 }
@@ -111,6 +115,8 @@ export const useJarvisStore = create<JarvisStore>((set, get) => ({
   voiceActive: false,
   voiceListening: false,
   voiceFeedback: true, // Default to true for "Voice Controlled" feel
+  isSpeaking: false,
+  voiceError: null,
 
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
   updateStreamContent: (token) =>
@@ -149,6 +155,8 @@ export const useJarvisStore = create<JarvisStore>((set, get) => ({
   setVoiceActive: (active) => set({ voiceActive: active }),
   setVoiceListening: (listening) => set({ voiceListening: listening }),
   setVoiceFeedback: (enabled) => set({ voiceFeedback: enabled }),
+  setVoiceError: (error) => set({ voiceError: error }),
+  setIsSpeaking: (speaking) => set({ isSpeaking: speaking }),
   setIsStreaming: (streaming) => set({ isStreaming: streaming }),
   clearMessages: () => set({ messages: [], conversationId: null, currentStreamContent: '' }),
 }));

@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { clsx } from 'clsx';
 
 export function TopBar() {
-  const { status, mode, setMode, voiceFeedback, setVoiceFeedback } = useJarvisStore();
+  const { status, mode, setMode, voiceFeedback, setVoiceFeedback, voiceActive, voiceListening, isSpeaking } = useJarvisStore();
   const [time, setTime] = useState(new Date());
   const [uptime, setUptime] = useState(0);
 
@@ -96,20 +96,31 @@ export function TopBar() {
           </span>
         </div>
 
-        <button 
+        <button
           onClick={() => setVoiceFeedback(!voiceFeedback)}
+          title={voiceActive ? 'Voice assistant active' : 'Toggle voice feedback'}
           className="flex items-center gap-1.5 group mr-2"
         >
-          {voiceFeedback ? (
-            <Mic className="w-3 h-3 text-jarvis-accent" />
+          {voiceActive || voiceListening || isSpeaking ? (
+            <Mic className="w-3 h-3 text-jarvis-accent animate-pulse" />
+          ) : voiceFeedback ? (
+            <Mic className="w-3 h-3 text-jarvis-glow" />
           ) : (
             <MicOff className="w-3 h-3 text-jarvis-dim group-hover:text-jarvis-warn transition-colors" />
           )}
           <span className={clsx(
-            "font-mono text-[9px] tracking-widest transition-colors",
-            voiceFeedback ? "text-jarvis-accent" : "text-jarvis-dim group-hover:text-jarvis-warn"
+            'font-mono text-[9px] tracking-widest transition-colors',
+            isSpeaking     ? 'text-jarvis-success animate-pulse' :
+            voiceListening ? 'text-jarvis-accent animate-pulse' :
+            voiceActive    ? 'text-jarvis-glow' :
+            voiceFeedback  ? 'text-jarvis-glow' :
+                             'text-jarvis-dim group-hover:text-jarvis-warn'
           )}>
-            VOICE:{voiceFeedback ? 'ON' : 'OFF'}
+            {isSpeaking     ? 'SPEAKING' :
+             voiceListening ? 'LISTENING' :
+             voiceActive    ? 'VOICE:ACTIVE' :
+             voiceFeedback  ? 'VOICE:ON' :
+                              'VOICE:OFF'}
           </span>
         </button>
 

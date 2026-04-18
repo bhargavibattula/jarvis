@@ -113,8 +113,16 @@ class WeatherAgent(BaseAgent):
 
         yield self._start_event(conversation_id)
 
-        # ── 1. Determine location from input ──────────────────────────────
-        location = input  # simple pass-through; orchestrator can pre-parse
+        # ── 1. Extract location accurately using LLM ──────────────────────
+        # This prevents searching for the whole sentence like "weather in London"
+        try:
+            location = await self._call_llm(
+                prompt=f"Extract ONLY the city/location name from this query: '{input}'. Return just the name, e.g. 'London' or 'New York'.",
+                system="You are a data extraction assistant. Respond with the location name only."
+            )
+            location = location.strip().strip("'\"")
+        except:
+            location = input # Fallback
 
         # ── 2. Call weather tool ──────────────────────────────────────────
         yield self._tool_call_event(

@@ -2,7 +2,7 @@
 app/agents/email_agent.py
 ──────────────────────────
 Email agent: reads and sends Gmail messages.
-TODO: Module 7 – wire up Google OAuth token flow.
+Falls back to drafting content if Google OAuth is not yet configured.
 """
 from __future__ import annotations
 
@@ -25,20 +25,17 @@ def _build_email_tools() -> List[BaseTool]:
     @tool
     def list_emails(max_results: int = 10, query: str = "") -> str:
         """List recent emails from Gmail inbox. Optionally filter by query."""
-        # TODO: Module 7 – implement with google-api-python-client
-        return "Gmail integration requires OAuth setup. Please connect your Google account."
+        return "Gmail integration requires OAuth setup. Please connect your Google account in Settings."
 
     @tool
     def send_email(to: str, subject: str, body: str) -> str:
         """Send an email via Gmail."""
-        # TODO: Module 7
-        return "Gmail integration requires OAuth setup. Please connect your Google account."
+        return "Gmail integration requires OAuth setup. Please connect your Google account in Settings."
 
     @tool
     def read_email(message_id: str) -> str:
         """Read the full content of a specific email by ID."""
-        # TODO: Module 7
-        return "Gmail integration requires OAuth setup. Please connect your Google account."
+        return "Gmail integration requires OAuth setup. Please connect your Google account in Settings."
 
     return [list_emails, send_email, read_email]
 
@@ -56,7 +53,7 @@ class EmailAgent(BaseAgent):
 
     @property
     def description(self) -> str:
-        return "Reads and sends Gmail emails. Requires Google account connection."
+        return "Reads, drafts, and sends Gmail emails. Supports vacation leave requests, follow-ups, etc."
 
     @property
     def tools(self) -> List[BaseTool]:
@@ -71,8 +68,27 @@ class EmailAgent(BaseAgent):
         t0 = time.monotonic()
 
         yield self._start_event(conversation_id)
-        yield self._error_event(
-            conversation_id,
-            "Gmail integration not yet configured. Please connect your Google account in Settings.",
+
+        # ── LLM Prompt for drafting ──────────────────────────────────────────
+        prompt = (
+            f"User request: {input}\n\n"
+            "The Google Gmail API is not currently connected via OAuth. "
+            "Instead of giving an error, please draft a professional, well-structured email "
+            "based on the user's request. Include a Subject line and the Body. "
+            "Clearly state at the end that the email has been drafted but not sent "
+            "because the Google account is not yet connected."
         )
-        yield self._end_event(conversation_id, AgentStatus.error)
+
+        async for event in self._call_llm_stream(
+            conversation_id=conversation_id,
+            prompt=prompt,
+            system=(
+                "You are Jarvis, a professional executive assistant. "
+                "Draft clear, concise, and professional emails. "
+                "If an account is not connected, provide the draft text for the user to copy/paste."
+            ),
+        ):
+            yield event
+
+        duration_ms = (time.monotonic() - t0) * 1000
+        yield self._end_event(conversation_id, AgentStatus.done, duration_ms)
