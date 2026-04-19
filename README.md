@@ -31,6 +31,19 @@ JARVIS is designed for a completely hands-free interaction loop:
 
 ---
 
+## ⚡ Quick Start: Voice Interaction
+
+To experience JARVIS in full voice mode:
+
+1. **Activate**: Navigate to the **VOICE** tab in the right-hand panel.
+2. **Authorize**: Click **ACTIVATE JARVIS**. This will request browser microphone permissions if not already granted.
+3. **Trigger**: Say **"Hey Jarvis"**. You will hear a soft beep (chirp) indicating the system is now recording your command.
+4. **Command**: State your request naturally (e.g., *"What's the weather like in New York?"*).
+5. **Listen**: JARVIS will process the request and speak the answer back to you.
+6. **Continue**: Once JARVIS finishes speaking, it automatically goes back to listening for the wake word.
+
+---
+
 ## 🧠 The Agent Network
 
 JARVIS delegates complexity to a network of specialized agents, each equipped with its own toolset:
